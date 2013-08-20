@@ -69,6 +69,14 @@ The complexity is then \(O(l*n*r^2)\), where \(l\) is the number of lights, \(n\
 
 After the shadow maps are generated there is a single render pass. The fragment shader runs in a loop that computes the Percentage-Closer Filtering coverage for each light. The coverage is used as a normalized weight for the light emitted from the surface.
 
+
+\subsection{Percentage-Closer Filtering}
+
+The major restraint of shadow mapping is the resolution of the depth map. Since the size of the frustum determines the resolution, casters that are far apart cause the shadow quality to degrade. The tightest frustum must be chosen to maximize sample quality.
+
+Despite shadow mapping being an image-space algorithm, typical sampling techniques do not work with shadow maps because shadow maps store depth and not color. The algorithm does a comparison for each pixel to determine visibility. A shadow map is therefore a two-dimensional array of boolean values indicating whether a given fragment is in shadow. Sampling techniques can then be used on the boolean texture to compute the "coverage" of a neighborhood about a fragment. The resuling value ranges between zero and one.
+This value can be used to weight the brightness of the shaded fragment, creating a penumbra at shadow edges.
+
 \begin{algorithm}
 result = 0\;
 \For{each light}
@@ -91,19 +99,12 @@ result = 0\;
 \KwRet{result}
 \end{algorithm}
 
-\subsection{Percentage-Closer Filtering}
-
-The major restraint of shadow mapping is the resolution of the depth map. Since the size of the frustum determines the resolution, casters that are far apart cause the shadow quality to degrade. The tightest frustum must be chosen to maximize sample quality.
-
-Despite shadow mapping being an image-space algorithm, typical sampling techniques do not work with shadow maps because shadow maps store depth and not color. The algorithm does a comparison for each pixel to determine visibility. A shadow map is therefore a two-dimensional array of boolean values indicating whether a given fragment is in shadow. Sampling techniques can then be used on the boolean texture to compute the "coverage" of a neighborhood about a fragment. The resuling value ranges between zero and one.
-This value can be used to weight the brightness of the shaded fragment, creating a penumbra at shadow edges.
-
 This is percentage-closer filtering. The weight or "coverage" at a given fragment denotes whether a fragment is near a shadow border. Instead of having a jagged stair-stepping pattern at shadow edges due to resolution constraints, PCF creates a soft shadow.
 This effectively anti-aliases the shadow map. Note that a soft shadow will result from non-area lights.
 
 \begin{figure}
 \centering
-\includegraphics[scale=0.5]{depth.eps}
+\includegraphics[scale=0.5]{depth2.eps}
 \caption{\label{fig:depth} Depth values of depth map and current fragments.}
 \end{figure}
 
@@ -114,8 +115,10 @@ This effectively anti-aliases the shadow map. Note that a soft shadow will resul
 \caption{\label{fig:pcf} A 3x3 PCF filter window. The weight of the fragment of the lighter triangle is 6/9.}
 \end{figure}
 
-Figure \ref{fig:depth} shows the depth values from the light and the eye for three pixels. Notice that there is a jump in depth between the second and third pixel. Linear interpolation works fine while all the samples are on the same object, but it fails when sampling two objects at different depths.
-Part of the black object between the second and third pixel will be incorrectly shadowed because the average depth is being skewed by the closer object. Point sampling is more accurate than linear interpolation in this case.
+Figure \ref{fig:depth} shows the depth values from the light and the eye for three pixels. Note that the rays traced from the scene back to the light do not land on at depth map centers. The three depths from the depth map using linear interpolation would be 1.0, 1.0, and 1.7. Comparing these values against the depths from the eye (1.5, 1.75, and 2.0) tells us that all three points are in shadow because the depth map values are closer.
+Obviously the third value should not be in shadow. The problem with linear interpolation is that it averages depths between two objects, creating a depth value of 1.7 which is somewhere between the depths of the two objects.
+PCF would instead compare the eye depth of 2.0 to the depth map values of 1.0 and 2.0. The first value is in shadow and the second is not in shadow. This gives a coverage of 0.5.
+Since the pixel is close to the edge of a shadow it will be partially in shadow.
 
 Figure \ref{fig:pcf} shows a 3x3 sample window on a depth map containing two triangles. The darker triangle is significantly closer than the lighter one. The pixel in the center of the window of the lighter fragment is the one being shaded. If we use a simple PCF averaging filter then the coverage is 6/9 because six fragments are covered by a depth near the current sample and three are much closer. Three of the samples are in shadow because the darker triangle overlaps the lighter one.
 
@@ -189,6 +192,18 @@ Every frame requires one depth pass, one render pass, and l stencil passes where
 \section{Results}
 
 See Table~\ref{tab:widgets}
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.5]{ArmadilloMaps.png}
+\caption{\label{fig:mapping} Shadow mapping with 5 lights. The shadow maps are on the left.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.5]{ArmadilloVolumes.png}
+\caption{\label{fig:volumes} Shadow volumes with 5 lights.}
+\end{figure}
 
 \begin{table}
 \centering
